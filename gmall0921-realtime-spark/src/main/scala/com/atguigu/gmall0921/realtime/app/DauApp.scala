@@ -13,40 +13,30 @@ import org.apache.spark.SparkConf
 import org.apache.spark.streaming.dstream.{DStream, InputDStream}
 import org.apache.spark.streaming.kafka010.{HasOffsetRanges, OffsetRange}
 import org.apache.spark.streaming.{Seconds, StreamingContext}
-import redis.clients.jedis.Jedis
 
 import scala.collection.mutable.ListBuffer
-
 
 //使用手动后置提交偏移量     做幂等性存储处理
 
 object DauApp {
-
-  /*
-  1 、  筛选出用户最基本的活跃行为 （ 打开应用程序 是否有start项    ，打开第一个页面 (page 项中,没有 last_page_id))
-  2 、  去重，以什么字段为准进行去重 (用户id ,ip ,mid),用redis来存储已访问列表  什么数据对象来存储列表
-  3、   得到用户的日活明细后， 方案一： 直接明细保存到某个数据库中   使用OLAP进行统计汇总
-                             方案二： 进行统计汇总之后再保存
-   */
-
   /*
     手动后置提交偏移量
-    1读取偏移量初始值
+    读取偏移量初始值
         从redis中读取偏移量的数据，
             偏移量在redis中以什么样的格式保存
             主题-消费者组-分区-offset
-    2加载数据
-       如果能取得偏移量则从偏移量位置取得数据量 否则 从最新的位置取得数据流
+    加载数据
+       如果能取得偏移量则从偏移量位置取得数据量 否则从最新的位置取得数据流
 
-    3获得偏移量结束点
-     4存储偏移量
+    获得偏移量结束点
+    存储偏移量
   */
 
   def main(args: Array[String]): Unit = {
     val sparkConf: SparkConf = new SparkConf().setMaster("local[4]").setAppName("dau_app")
     //1 业务对时效的需求  2 处理业务的计算时间  尽量保证周期内可以处理完当前批次
     val ssc = new StreamingContext(sparkConf, Seconds(5))
-    val topic = "ODS_BASE_LOG"
+    val topic = "realtimeSpark"
     val groupid = "dau_app_group"
 
     val offsetMap: Map[TopicPartition, Long] = OffsetManagerUtil.getOffset(topic, groupid)
@@ -69,7 +59,6 @@ object DauApp {
       //            }
       rdd
     }
-
 
     //把ts 转换成日期 和小时 为后续便于处理
     val jsonObjDstream: DStream[JSONObject] = inputDstreamWithOffsetDstream.map { record =>

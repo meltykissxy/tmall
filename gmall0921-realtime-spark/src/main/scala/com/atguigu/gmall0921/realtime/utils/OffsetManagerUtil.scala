@@ -9,9 +9,6 @@ import redis.clients.jedis.Jedis
 import scala.collection.mutable
 
 object OffsetManagerUtil {
-
-
-
 /*  读取redis中的偏移量*/
   def getOffset(topic:String,groupId:String): Map[TopicPartition,Long] ={
       val jedis: Jedis = RedisUtil.getJedisClient
@@ -33,13 +30,7 @@ object OffsetManagerUtil {
     }else{
          null
     }
-
-
-
-
   }
-
-
   //把偏移量写入redis
   def  saveOffset(topic:String ,groupId:String,offsetRanges: Array[OffsetRange]): Unit ={
     val jedis: Jedis = RedisUtil.getJedisClient

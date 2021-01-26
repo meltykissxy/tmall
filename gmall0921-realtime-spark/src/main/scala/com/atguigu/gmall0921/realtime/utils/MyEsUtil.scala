@@ -12,13 +12,11 @@ import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder
 import org.elasticsearch.search.sort.SortOrder
 
 object MyEsUtil {
-  private    var  factory:  JestClientFactory=null;
+  private var factory: JestClientFactory = null;
 
-
-  def getClient:JestClient={
-    if(factory==null) build()
+  def getClient: JestClient={
+    if(factory == null) build()
     factory.getObject
-
   }
 
   def build(): Unit ={
@@ -29,7 +27,6 @@ object MyEsUtil {
       .multiThreaded(true).maxTotalConnection(10)
       .connTimeout(10000).readTimeout(10000).build())
   }
-
 
   def main(args: Array[String]): Unit = {
     search()

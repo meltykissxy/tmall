@@ -24,10 +24,13 @@ object RedisUtil {
     jedisPool.getResource
   }
 
-  def main(args: Array[String]): Unit = {
-    val jedisClient = getJedisClient
-    println(jedisClient.ping())
-    jedisClient.close()
-  }
+    /**
+     * 测试
+     */
+    //  def main(args: Array[String]): Unit = {
+//    val jedisClient = getJedisClient
+//    println(jedisClient.ping())
+//    jedisClient.close()
+//  }
 }
 
