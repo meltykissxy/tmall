@@ -14,13 +14,13 @@ import org.elasticsearch.search.sort.SortOrder
 object MyEsUtil {
   private var factory: JestClientFactory = null;
 
-  def getClient: JestClient={
+  def getClient: JestClient = {
     if(factory == null) build()
     factory.getObject
   }
 
   def build(): Unit ={
-    factory=new JestClientFactory
+    factory = new JestClientFactory
     val properties: Properties = PropertiesUtil.load("config.properties")
     val serverUri: String = properties.getProperty("elasticsearch.server")
     factory.setHttpClientConfig(new HttpClientConfig.Builder(serverUri)
@@ -28,13 +28,14 @@ object MyEsUtil {
       .connTimeout(10000).readTimeout(10000).build())
   }
 
-  def main(args: Array[String]): Unit = {
-    search()
-  }
+//  def main(args: Array[String]): Unit = {
+//    search()
+//  }
 
+  // KISS 查
   def search(): Unit ={
     val jest: JestClient = getClient
-   //组织参数
+    //组织参数，直接把完整的DSL命令复制过来就可以咯
     val query="{\n  \"query\": {\n    \"match\": {\n      \"name\": \"operation red sea\"\n    }\n  },\n  \"sort\": [\n    {\n      \"doubanScore\": {\n        \"order\": \"asc\"\n      }\n    }\n  ],\n  \"size\": 2\n  , \"from\": 0\n  ,\"_source\": [\"name\",\"doubanScore\"]\n  ,\"highlight\": { \"fields\": {\"name\":{ \"pre_tags\": \"<span color='red'>\", \"post_tags\": \"</span>\" }}}\n \n}"
 
     val searchSourceBuilder = new SearchSourceBuilder()
@@ -60,10 +61,10 @@ object MyEsUtil {
     jest.close()
   }
 
+  // KISS 第一个问题，我们得批量保存到ES，否则会分片，后续查找就麻烦了
   val DEFAULT_TYPE="_doc"
   //batch  bulk   构建批量保存
   def saveBulk(indexName:String, docList:List[(String,Any)]): Unit ={
-
     val jest: JestClient = getClient
     val bulkBuilder = new Bulk.Builder()
     //加入很多个单行操作
@@ -82,13 +83,10 @@ object MyEsUtil {
   def save(): Unit ={
     val jest: JestClient = getClient
     // source 可以放2种 1 class case  2 通用可转json的对象  比如map
-    val index = new Index.Builder(MovieTest("0104","电影123")).index("movie_test0921_20210126").`type`("_doc")  .build()
+    val index = new Index.Builder(MovieTest("0104","电影123")).index("movie_test0921_20210126").`type`("_doc").build()
     jest.execute(index)
     jest.close()
   }
 
-
-  case class MovieTest(id:String,movie_name:String)
-
-
+  case class MovieTest(id:String, movie_name:String)
 }

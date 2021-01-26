@@ -3,6 +3,9 @@ package com.atguigu.gmall0921.realtime.utils
 import java.io.InputStreamReader
 import java.util.Properties
 
+/**
+ * 读取resources路径下的配置文件
+ */
 object PropertiesUtil {
   def load(propertieName:String): Properties ={
     val prop = new Properties();

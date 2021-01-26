@@ -61,35 +61,37 @@ object DauApp {
     }
 
     //把ts 转换成日期 和小时 为后续便于处理
-    val jsonObjDstream: DStream[JSONObject] = inputDstreamWithOffsetDstream.map { record =>
-      val jsonString: String = record.value()
-      val jSONObject: JSONObject = JSON.parseObject(jsonString)
-      //把时间戳转换成 日期和小时字段
-      val ts: lang.Long = jSONObject.getLong("ts")
-      val dateHourStr: String = new SimpleDateFormat("yyyy-MM-dd HH").format(new Date(ts))
-      val dateHour: Array[String] = dateHourStr.split(" ")
-      val date: String = dateHour(0)
-      val hour: String = dateHour(1)
-      jSONObject.put("dt", date)
-      jSONObject.put("hr", hour)
-      jSONObject
+    val jsonObjDstream: DStream[JSONObject] = inputDstreamWithOffsetDstream.map {
+      record =>
+        val jsonString: String = record.value()
+        val jSONObject: JSONObject = JSON.parseObject(jsonString)
+        //把时间戳转换成 日期和小时字段
+        val ts: lang.Long = jSONObject.getLong("ts")
+        val dateHourStr: String = new SimpleDateFormat("yyyy-MM-dd HH").format(new Date(ts))
+        val dateHour: Array[String] = dateHourStr.split(" ")
+        val date: String = dateHour(0)
+        val hour: String = dateHour(1)
+        jSONObject.put("dt", date)
+        jSONObject.put("hr", hour)
+        jSONObject
     }
     //  map(record=>record.value)
     // 1 、  筛选出用户最基本的活跃行为 （  打开第一个页面 (page 项中,没有 last_page_id))
-    val firstPageJsonObjDstream: DStream[JSONObject] = jsonObjDstream.filter { jsonObj =>
-      val pageJsonObj: JSONObject = jsonObj.getJSONObject("page")
-      if (pageJsonObj != null) {
-        val lastPageId: String = pageJsonObj.getString("last_page_id")
-        if (lastPageId == null || lastPageId.length == 0) {
-          true
+    val firstPageJsonObjDstream: DStream[JSONObject] = jsonObjDstream.filter {
+      jsonObj =>
+        val pageJsonObj: JSONObject = jsonObj.getJSONObject("page")
+        if (pageJsonObj != null) {
+          val lastPageId: String = pageJsonObj.getString("last_page_id")
+          if (lastPageId == null || lastPageId.length == 0) {
+            true
+          } else {
+            false
+          }
         } else {
           false
         }
-      } else {
-        false
-      }
     }
-    firstPageJsonObjDstream.cache() //
+    firstPageJsonObjDstream.cache()
     firstPageJsonObjDstream.count().print()
     // val jedis = RedisUtil.getJedisClient //driver  定义变量 ex中可以使用 前提1 该对象必须可以序列化 2 不能改值
     //2 、  去重，以什么字段为准进行去重 ( mid),用redis来存储已访问列表  什么数据对象来存储列表
@@ -116,29 +118,30 @@ object DauApp {
      }*/
 
     //优化过 ： 优化目的 减少创建（获取）连接的次数 ，做成每批次每分区 执行一次
-    val dauDstream: DStream[JSONObject] = firstPageJsonObjDstream.mapPartitions { jsonObjItr =>
-      val jedis = RedisUtil.getJedisClient //该批次 该分区 执行一次
-    val filteredList: ListBuffer[JSONObject] = ListBuffer[JSONObject]()
-      for (jsonObj <- jsonObjItr) { //条为单位处理
-        //提取对象中的mid
-        val mid: String = jsonObj.getJSONObject("common").getString("mid")
-        val dt: String = jsonObj.getString("dt")
-        // 查询 列表中是否有该mid
-        // 设计定义 已访问设备列表
+    val dauDstream: DStream[JSONObject] = firstPageJsonObjDstream.mapPartitions {
+      jsonObjItr =>
+        val jedis = RedisUtil.getJedisClient //该批次 该分区 执行一次
+        val filteredList: ListBuffer[JSONObject] = ListBuffer[JSONObject]()
+        for (jsonObj <- jsonObjItr) { //条为单位处理
+          //提取对象中的mid
+          val mid: String = jsonObj.getJSONObject("common").getString("mid")
+          val dt: String = jsonObj.getString("dt")
+          // 查询 列表中是否有该mid
+          // 设计定义 已访问设备列表
 
-        //redis   type? string （每个mid 每天 成为一个key,极端情况下的好处：利于分布式  ）   set √ ( 把当天已访问存入 一个set key  )   list(不能去重,排除) zset(不需要排序，排除) hash（不需要两个字段，排序）
-        // key? dau:[2021-01-22] (field score?)  value?  mid   expire?  24小时  读api? sadd 自带判存 写api? sadd
-        val key = "dau:" + dt
-        val isNew: lang.Long = jedis.sadd(key, mid)
-        jedis.expire(key, 3600 * 24)
+          //redis   type? string （每个mid 每天 成为一个key,极端情况下的好处：利于分布式  ）   set √ ( 把当天已访问存入 一个set key  )   list(不能去重,排除) zset(不需要排序，排除) hash（不需要两个字段，排序）
+          // key? dau:[2021-01-22] (field score?)  value?  mid   expire?  24小时  读api? sadd 自带判存 写api? sadd
+          val key = "dau:" + dt
+          val isNew: lang.Long = jedis.sadd(key, mid)
+          jedis.expire(key, 3600 * 24)
 
-        // 如果有(非新)放弃    如果没有 (新的)保留 //插入到该列表中
-        if (isNew == 1L) {
-          filteredList.append(jsonObj)
+          // 如果有(非新)放弃    如果没有 (新的)保留 //插入到该列表中
+          if (isNew == 1L) {
+            filteredList.append(jsonObj)
+          }
         }
-      }
-      jedis.close()
-      filteredList.toIterator
+        jedis.close()
+        filteredList.toIterator
     }
 
     // dauDstream.count().print()
@@ -165,11 +168,11 @@ object DauApp {
           // 选择id  1 ：必须保证 该id 在索引中是唯一  2： 必须保证id在不同时间 不同情况下 提交是不会变化
           val docWithIdList: List[(String, DauInfo)] = docList.map { jsonObj =>
             val commonJsonObj: JSONObject = jsonObj.getJSONObject("common")
-            val mid: String = jsonObj.getJSONObject("common").getString("mid")
-            val uid: String = jsonObj.getJSONObject("common").getString("uid")
-            val ar: String = jsonObj.getJSONObject("common").getString("ar")
-            val ch: String = jsonObj.getJSONObject("common").getString("ch")
-            val vc: String = jsonObj.getJSONObject("common").getString("vc")
+            val mid: String = commonJsonObj.getString("mid")
+            val uid: String = commonJsonObj.getString("uid")
+            val ar: String = commonJsonObj.getString("ar")
+            val ch: String = commonJsonObj.getString("ch")
+            val vc: String = commonJsonObj.getString("vc")
             val dt: String = jsonObj.getString("dt")
             val hr: String = jsonObj.getString("hr")
             val ts: Long = jsonObj.getLong("ts")
@@ -186,18 +189,13 @@ object DauApp {
       //2在driver存储driver全局数据 ，每个批次保存一次偏移量
       OffsetManagerUtil.saveOffset(topic, groupid, offsetRanges)
 
-      println("AAAA")
+      //println("AAAA")
     }
     //driver ? ex? d 只执行一次
     //OffsetManagerUtil.saveOffset(topic,groupid,offsetRanges)//3
-    println("BBBB") // 在控制台中先打印A还是先打印B
+    //println("BBBB") // 在控制台中先打印A还是先打印B
 
     ssc.start()
     ssc.awaitTermination()
-
   }
-
 }
-
-// 1 理解： 能够是到 每行都是干什么用的  用到的时候 知道把哪行 粘到 你的类中什么地方
-// 2 微调： 要会调试  比如要把偏移量保存在mysql  你能不能改？
